@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1565c0">
+<title>Barcode 128</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,sans-serif;background:#f3f5f8;color:#1b1f24}
+header{background:#1565c0;color:#fff;padding:16px;padding-top:calc(16px + env(safe-area-inset-top,0px));font-size:20px;font-weight:600}
+main{padding:16px;max-width:480px;margin:auto}
+label{font-size:14px;color:#555}
+input[type=text],textarea{width:100%;padding:14px;font-size:18px;border:1px solid #ccd;border-radius:10px;margin:6px 0 12px;font-family:inherit}
+textarea{min-height:90px;resize:vertical}
+.row{display:flex;gap:10px;margin-bottom:12px}
+.row>div{flex:1}
+input[type=range]{width:100%}
+button{flex:1;padding:14px;font-size:16px;border:0;border-radius:10px;background:#1565c0;color:#fff}
+button.sec{background:#e3e8ef;color:#1b1f24}
+.tabs{display:flex;background:#e3e8ef;border-radius:10px;padding:4px;margin-bottom:14px}
+.tabs button{background:transparent;color:#1b1f24;padding:10px}
+.tabs button.on{background:#1565c0;color:#fff}
+.card{background:#fff;border-radius:12px;padding:12px;text-align:center;margin:12px 0;box-shadow:0 1px 3px #0002}
+.card canvas{max-width:100%;height:auto}
+.card .bt{display:flex;gap:8px;margin-top:8px}
+.card .bt button{padding:8px;font-size:14px}
+#err{color:#c62828;font-size:14px;min-height:18px}
+.hint{font-size:13px;color:#667;margin:-6px 0 10px}
+h2{font-size:16px;margin:20px 0 8px}
+.h{display:flex;justify-content:space-between;align-items:center;background:#fff;padding:12px;border-radius:10px;margin-bottom:8px}
+.h span{font-size:16px;word-break:break-all}
+.h button{flex:none;padding:6px 12px;font-size:14px;margin-left:6px}
+.hide{display:none}
+</style>
+</head>
+<body>
+<header>Generator Barcode 128</header>
+<main>
+  <div class="tabs">
+    <button id="tS" class="on">Tunggal</button>
+    <button id="tB">Batch</button>
+  </div>
+
+  <div id="single">
+    <label for="t">Teks / angka</label>
+    <input id="t" type="text" placeholder="Contoh: ABC-12345" autocomplete="off">
+  </div>
+  <div id="batch" class="hide">
+    <label for="b">Banyak teks / angka</label>
+    <textarea id="b" placeholder="Contoh: 12345, ABC-01 998877 XYZ"></textarea>
+    <div class="hint">Pisahkan dengan koma, titik, spasi, atau baris baru. Setiap bagian menjadi satu barcode.</div>
+  </div>
+
+  <div class="row">
+    <div><label>Lebar garis: <b id="wv">3</b></label><input id="w" type="range" min="1" max="6" value="3"></div>
+    <div><label>Tinggi: <b id="hv">120</b></label><input id="h" type="range" min="60" max="300" step="10" value="120"></div>
+  </div>
+  <div id="err"></div>
+
+  <div id="out"></div>
+
+  <div id="singleBtns">
+    <div class="row">
+      <button id="save">Simpan PNG</button>
+      <button id="share" class="sec">Bagikan</button>
+    </div>
+  </div>
+  <div id="batchBtns" class="hide">
+    <div class="row">
+      <button id="saveAll">Simpan semua (1 gambar)</button>
+    </div>
+    <div class="row">
+      <button id="saveEach" class="sec">Simpan satu per satu</button>
+      <button id="shareAll" class="sec">Bagikan semua</button>
+    </div>
+  </div>
+  <div class="row"><button id="add" class="sec">Simpan ke riwayat</button></div>
+
+  <h2>Riwayat</h2>
+  <div id="hist"></div>
+  <div class="row"><button id="clr" class="sec">Hapus riwayat</button></div>
+</main>
+<script>
+const P="212222 222122 222221 121223 121322 131222 122213 122312 132212 221213 221312 231212 112232 122132 122231 113222 123122 123221 223211 221132 221231 213212 223112 312131 311222 321122 321221 312212 322112 322211 212123 212321 232121 111323 131123 131321 112313 132113 132311 211313 231113 231311 112133 112331 132131 113123 113321 133121 313121 211331 231131 213113 213311 213131 311123 311321 331121 312113 312311 332111 314111 221411 431111 111224 111422 121124 121421 141122 141221 112214 112412 122114 122411 142112 142211 241211 221114 413111 241112 134111 111242 121142 121241 114212 124112 124211 411212 421112 421211 212141 214121 412121 111143 111341 131141 114113 114311 411113 411311 113141 114131 311141 411131 211412 211214 211232 2331112".split(" ");
+
+function encode(s){
+  for(const ch of s){const c=ch.charCodeAt(0);if(c<32||c>126)throw new Error("Karakter tidak didukung: "+ch);}
+  const codes=[];let mode=null;let i=0;
+  const digRun=p=>{let n=0;while(p+n<s.length&&s[p+n]>="0"&&s[p+n]<="9")n++;return n;};
+  while(i<s.length){
+    const run=digRun(i);
+    const useC=run>=4||(run>=2&&run===s.length-i&&i===0);
+    if(useC){
+      if(mode===null)codes.push(105);else if(mode!=="C")codes.push(99);
+      mode="C";
+      const n=run-(run%2);
+      for(let k=0;k<n;k+=2)codes.push(parseInt(s.substr(i+k,2),10));
+      i+=n;
+    }else{
+      if(mode===null)codes.push(104);else if(mode!=="B")codes.push(100);
+      mode="B";
+      codes.push(s.charCodeAt(i)-32);i++;
+    }
+  }
+  let sum=codes[0];
+  for(let k=1;k<codes.length;k++)sum+=codes[k]*k;
+  codes.push(sum%103,106);
+  return codes;
+}
+
+const $=id=>document.getElementById(id);
+let isBatch=false;
+let items=[];      // [{text, canvas}]
+
+function drawTo(cv,s){
+  const mod=+$("w").value,bh=+$("h").value,quiet=10*mod,fs=18+mod*2;
+  const codes=encode(s);
+  const pat=codes.map(c=>P[c]).join("");
+  let total=0;for(const d of pat)total+=+d;
+  const wf=10+mod*2;
+  const W=total*mod+quiet*2,H=bh+fs+24+wf+10;
+  cv.width=W;cv.height=H;
+  const ctx=cv.getContext("2d");
+  ctx.fillStyle="#fff";ctx.fillRect(0,0,W,H);
+  ctx.fillStyle="#000";
+  let x=quiet,bar=true;
+  for(const d of pat){const w=+d*mod;if(bar)ctx.fillRect(x,8,w,bh);x+=w;bar=!bar;}
+  ctx.font=fs+"px monospace";ctx.textAlign="center";
+  ctx.fillText(s,W/2,bh+8+fs+4,W-10);
+  ctx.font="italic "+wf+"px sans-serif";ctx.fillStyle="#666";ctx.textAlign="center";
+  ctx.fillText("by aLeMaX",W/2,H-8);
+}
+
+const blobOf=cv=>new Promise(r=>cv.toBlob(r,"image/png"));
+const safe=s=>(s.replace(/[^\w-]/g,"_").slice(0,30)||"kode");
+// Nama file otomatis berurutan: 001_kode.png, 002_kode.png, ... (nomor tersimpan di perangkat)
+function seq(){
+  let n=0;try{n=+(localStorage.getItem("c128")||0);}catch(e){}
+  n++;try{localStorage.setItem("c128",String(n));}catch(e){}
+  return String(n).padStart(3,"0");
+}
+const fname=(s)=>seq()+"_"+safe(s)+".png";
+let toastT;
+function toast(msg){
+  let t=$("toast");
+  if(!t){t=document.createElement("div");t.id="toast";
+    t.style.cssText="position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:20px;font-size:14px;z-index:9;max-width:90%;text-align:center";
+    document.body.appendChild(t);}
+  t.textContent=msg;t.style.display="block";
+  clearTimeout(toastT);toastT=setTimeout(()=>t.style.display="none",2500);
+}
+// Di aplikasi APK (Capacitor) fungsi native tersedia lewat Capacitor.Plugins; di browser dipakai cara web biasa.
+const NP=()=>(window.Capacitor&&window.Capacitor.Plugins)||{};
+function toB64(b){return new Promise((res,rej)=>{const f=new FileReader();f.onload=()=>res(String(f.result).split(",")[1]);f.onerror=rej;f.readAsDataURL(b);});}
+async function download(b,name){
+  const pl=NP();
+  if(pl.MediaSaver){
+    try{await pl.MediaSaver.save({data:await toB64(b),name:name});toast("Tersimpan di galeri: "+name);}
+    catch(e){toast("Gagal menyimpan: "+((e&&e.message)||e));}
+    return;
+  }
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(b);a.download=name;
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+  toast("Disimpan: "+name);
+}
+const parseBatch=v=>[...new Set(v.split(/[,.\s]+/).filter(Boolean))];
+const curValue=()=>isBatch?$("b").value:$("t").value;
+
+function render(){
+  $("wv").textContent=$("w").value;$("hv").textContent=$("h").value;
+  $("err").textContent="";
+  const out=$("out");out.innerHTML="";items=[];
+  const list=isBatch?parseBatch($("b").value):($("t").value?[$("t").value]:[]);
+  const bad=[];
+  list.forEach(s=>{
+    const cv=document.createElement("canvas");
+    try{drawTo(cv,s);}catch(e){bad.push(s);return;}
+    items.push({text:s,canvas:cv});
+    const card=document.createElement("div");card.className="card";
+    card.appendChild(cv);
+    if(isBatch){
+      const n=items.length;
+      const bt=document.createElement("div");bt.className="bt";
+      const a=document.createElement("button");a.textContent="Simpan";
+      a.onclick=async()=>download(await blobOf(cv),fname(s,n));
+      const b=document.createElement("button");b.className="sec";b.textContent="Bagikan";
+      b.onclick=()=>shareFiles([{text:s,canvas:cv,n}]);
+      bt.append(a,b);card.appendChild(bt);
+    }
+    out.appendChild(card);
+  });
+  if(bad.length)$("err").textContent="Dilewati (karakter tidak didukung): "+bad.join(", ");
+  if(isBatch&&items.length)$("saveAll").textContent="Simpan semua ("+items.length+") jadi 1 gambar";
+}
+
+async function shareFiles(list){
+  if(!list.length)return;
+  const pl=NP();
+  if(pl.Share&&pl.Filesystem){
+    try{
+      const uris=[];
+      for(let k=0;k<list.length;k++){
+        const r=await pl.Filesystem.writeFile({path:"share_"+(k+1)+"_"+safe(list[k].text)+".png",data:await toB64(await blobOf(list[k].canvas)),directory:"CACHE"});
+        uris.push(r.uri);
+      }
+      await pl.Share.share({title:"Barcode 128",files:uris});
+    }catch(e){if(!/cancel/i.test(String((e&&e.message)||e)))toast("Gagal membagikan: "+((e&&e.message)||e));}
+    return;
+  }
+  const files=[];
+  for(const it of list)files.push(new File([await blobOf(it.canvas)],fname(it.text,list.length>1||it.n?(it.n||files.length+1):0),{type:"image/png"}));
+  try{
+    if(navigator.canShare&&navigator.canShare({files}))await navigator.share({files,title:"Barcode 128"});
+    else if(navigator.share)await navigator.share({title:"Barcode 128",text:list.map(i=>i.text).join(", ")});
+    else $("err").textContent="Fitur bagikan tidak tersedia, gunakan Simpan.";
+  }catch(e){}
+}
+
+function combined(){
+  const gap=24,pad=16;
+  const W=Math.max(...items.map(i=>i.canvas.width))+pad*2;
+  const H=items.reduce((a,i)=>a+i.canvas.height+gap,pad*2-gap);
+  const c=document.createElement("canvas");c.width=W;c.height=H;
+  const ctx=c.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,W,H);
+  let y=pad;
+  items.forEach(i=>{ctx.drawImage(i.canvas,Math.round((W-i.canvas.width)/2),y);y+=i.canvas.height+gap;});
+  return c;
+}
+
+$("save").onclick=async()=>{if(items.length)download(await blobOf(items[0].canvas),fname(items[0].text));};
+$("share").onclick=()=>shareFiles(items.slice(0,1));
+$("saveAll").onclick=async()=>{if(items.length)download(await blobOf(combined()),seq()+"_batch"+items.length+".png");};
+$("saveEach").onclick=async()=>{
+  for(let k=0;k<items.length;k++){await download(await blobOf(items[k].canvas),fname(items[k].text));await new Promise(r=>setTimeout(r,400));}
+};
+$("shareAll").onclick=()=>shareFiles(items);
+
+function setMode(b){
+  isBatch=b;
+  $("tS").classList.toggle("on",!b);$("tB").classList.toggle("on",b);
+  $("single").classList.toggle("hide",b);$("batch").classList.toggle("hide",!b);
+  $("singleBtns").classList.toggle("hide",b);$("batchBtns").classList.toggle("hide",!b);
+  render();
+}
+$("tS").onclick=()=>setMode(false);
+$("tB").onclick=()=>setMode(true);
+
+let hist=[];
+try{hist=JSON.parse(localStorage.getItem("hist128")||"[]");}catch(e){}
+// riwayat lama berupa string; bentuk baru {v, b}
+hist=hist.map(h=>typeof h==="string"?{v:h,b:false}:h);
+function saveHist(){try{localStorage.setItem("hist128",JSON.stringify(hist));}catch(e){}renderHist();}
+function renderHist(){
+  const el=$("hist");el.innerHTML="";
+  if(!hist.length){el.innerHTML='<div style="color:#777;font-size:14px">Belum ada riwayat.</div>';return;}
+  hist.forEach((h,i)=>{
+    const d=document.createElement("div");d.className="h";
+    const sp=document.createElement("span");sp.textContent=(h.b?"[Batch] ":"")+h.v;
+    const o=document.createElement("button");o.textContent="Buka";
+    o.onclick=()=>{if(h.b)$("b").value=h.v;else $("t").value=h.v;setMode(h.b);scrollTo(0,0);};
+    const x=document.createElement("button");x.className="sec";x.textContent="✕";x.onclick=()=>{hist.splice(i,1);saveHist();};
+    const g=document.createElement("div");g.append(o,x);
+    d.append(sp,g);el.append(d);
+  });
+}
+$("add").onclick=()=>{
+  const v=curValue().trim();if(!v)return;
+  hist=[{v,b:isBatch},...hist.filter(h=>!(h.v===v&&h.b===isBatch))].slice(0,50);saveHist();
+};
+$("clr").onclick=()=>{hist=[];saveHist();};
+["t","b","w","h"].forEach(id=>$(id).addEventListener("input",render));
+renderHist();render();
+</script>
+</body>
+</html>
